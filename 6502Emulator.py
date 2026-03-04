@@ -4,12 +4,26 @@
 
 #EndReminder
 from pathlib import Path
+from tkinter import *
+from tkinter import ttk
 #import numpy as np
 
 MemorySize = 65536
 Stacksize = 256
 
 #It feels nice writing actual code after a long time of just scripting, makes me feel less of a fraud as a "programmer"
+
+class GUI():
+    def __init__(self):
+        root = Tk()
+        root.title("6502 Emulator (wow)")
+        mainframe = ttk.Frame(root, padding=(3,3,12,12), height=500, width=500)
+        mainframe.grid(sticky=(N, W, E, S))
+
+        hexDumpLabel = ttk.Label(mainframe, border=2,padding=(3,3,3,3), relief=SUNKEN)
+        hexDumpLabel.place(anchor=SW, width=100, height=10)
+
+        root.mainloop()
 
 
 class CPU(): #Reasoning is that I don't want to use global variables so I am just putting everything in a CPU class, only problem is I wasn't planning this :P
@@ -20,9 +34,9 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         
         self.Registers = { #all variables
             "A" : 0,
-            "S" : 0x00,
+            "S" : 0,
             "X" : 0,
-            "Y" : 0x00,
+            "Y" : 0,
         }
         
         self.StatusRegister = bytearray(1)
@@ -99,12 +113,11 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         self.IncDecRegister("X", 0x01)
         if self.GetReg("X") > -1:
             self.ClearStatusReg(0x80)
-            #self.StatusRegisters["Negative"] = 0
         self.CheckRegZero("X")
 
     def INY(self):
         self.IncDecRegister("Y", 0x01)
-        if self.GetReg("X") > 0:
+        if self.GetReg("X") > -1:
             self.ClearStatusReg(0x80)
         self.CheckRegZero("Y")
 
@@ -234,16 +247,22 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         if self.StatusRegister & 0x01: #Forgot to erase the "not", forgot why it was there but it was needed that I know
             self.ProgramCounter += (address)
 
-    def TAY(self):
-        self.Registers["Y"] = self.Registers["A"]
-        self.CheckRegZero("A")
-        if self.GetReg("A") < 0:
-            self.SetStatusReg(0x80)
+    # def TAY(self):
+    #     self.Registers["Y"] = self.Registers["A"]
+    #     self.CheckRegZero("A")
+    #     if self.GetReg("A") < 0:
+    #         self.SetStatusReg(0x80)
 
-    def TYA(self):
-        self.Registers["A"] = self.Registers["Y"]
-        self.CheckRegZero("Y")
-        if self.GetReg("Y") < 0:
+    # def TYA(self):
+    #     self.Registers["A"] = self.Registers["Y"]
+    #     self.CheckRegZero("Y")
+    #     if self.GetReg("Y") < 0:
+    #         self.SetStatusReg(0x80)
+
+    def TransferRegs(self, origin, dest):
+        self.Registers[dest] = self.Registers[origin]
+        self.CheckRegZero(origin)
+        if self.GetReg(origin) < 0:
             self.SetStatusReg(0x80)
 
     def RTS(self):
@@ -266,7 +285,15 @@ class MemoryObject(): #Ram class
         self.Memory[Address] = value
 
     def Hexdump(self):
-        return self.Memory.hex()
+        numOfLoops = int((MemorySize/16)/2048) + 1 #split the hexdump into 2048 segments due to string limit, setup the rownumber loop accordingly
+        for x in range(0,numOfLoops):
+            message = f"Hexdump ({x+1}): "
+            for rownumber in range(int(MemorySize/16)):
+                message += f"\n {rownumber} | " + (" ".join(str(self.Memory[16*rownumber:(rownumber*16)+16], ).lstrip("bytearray(b'").rstrip("')").split(r'\x')))
+            #message += " ".join(self.Memory[16*rownumber:(rownumber*16)+15])
+        #print(message)
+        return message
+        #return self.Memory.hex()
 
 # def ReadMachineCode(): #Please name the binary data file to "binarydata.txt" or it won't work.
 #     with open(Path(__file__).parent.resolve().joinpath("binarydata.txt"), "rb") as f:
@@ -297,6 +324,7 @@ def ReadMachineCode():
 
 CPU = CPU()
 RAM = MemoryObject(MemorySize)
+EmulatorMenu = GUI()
 
     #0xc8 : {
         #"Func" : CPU.INY,
@@ -344,11 +372,11 @@ CallTable[0xDD] = (CPU.CMPAbsoluteX, 3, 0x83)
 
 CallTable[0xB0] = (CPU.BCS, 2, 0x00)
 
-CallTable[0xA8] = (CPU.TAY, 1, 0x82)
+CallTable[0xA8] = (CPU.TransferRegs["A", "Y"], 1, 0x82)
 
 CallTable[0x9D] = (CPU.STAAbsoluteX, 3, 0x00)
 
-CallTable[0x98] = (CPU.TYA, 1, 0x82)
+CallTable[0x98] = (CPU.TransferRegs("Y", "A"), 1, 0x82)
 
 CallTable[0x60] = (CPU.RTS, 1, 0x00)
 #endregion
@@ -391,7 +419,7 @@ while CPU.Running:
     opcode = int(CPU.Step(RAM),16)
     #CPU.IncrementPC SINCE WHEN WAS IT LIKE THIS 20/02/2026
     CallTable[opcode][0]() #I spent like an hour just to learn I need to put parantheses here cause without them it just goes NOP and not NOP()
-    print(CallTable[opcode])
+    #print(CallTable[opcode])
     CPU.IncrementPC(CallTable[opcode][1]-1) #Indexing error .d should've been 1 instead of 2
     cycles += 1
     #print("a")
