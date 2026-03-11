@@ -6,6 +6,7 @@
 from pathlib import Path
 from tkinter import *
 from tkinter import ttk
+import EmulatorDashboard
 #import numpy as np
 
 MemorySize = 65536
@@ -76,6 +77,8 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         else:
             return True
         
+    def GetStatusReg(self):
+        return self.StatusRegister
     
     def IncDecRegister(self, register, value):
         self.Registers[register] += value
@@ -247,23 +250,23 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         if self.StatusRegister & 0x01: #Forgot to erase the "not", forgot why it was there but it was needed that I know
             self.ProgramCounter += (address)
 
-    # def TAY(self):
-    #     self.Registers["Y"] = self.Registers["A"]
-    #     self.CheckRegZero("A")
-    #     if self.GetReg("A") < 0:
-    #         self.SetStatusReg(0x80)
-
-    # def TYA(self):
-    #     self.Registers["A"] = self.Registers["Y"]
-    #     self.CheckRegZero("Y")
-    #     if self.GetReg("Y") < 0:
-    #         self.SetStatusReg(0x80)
-
-    def TransferRegs(self, origin, dest):
-        self.Registers[dest] = self.Registers[origin]
-        self.CheckRegZero(origin)
-        if self.GetReg(origin) < 0:
+    def TAY(self):
+        self.Registers["Y"] = self.Registers["A"]
+        self.CheckRegZero("A")
+        if self.GetReg("A") < 0:
             self.SetStatusReg(0x80)
+
+    def TYA(self):
+        self.Registers["A"] = self.Registers["Y"]
+        self.CheckRegZero("Y")
+        if self.GetReg("Y") < 0:
+            self.SetStatusReg(0x80)
+
+    # def TransferRegs(self, origin, dest):
+    #     self.Registers[dest] = self.Registers[origin]
+    #     self.CheckRegZero(origin)
+    #     if self.GetReg(origin) < 0:
+    #         self.SetStatusReg(0x80)
 
     def RTS(self):
         self.ProgramCounter = RAM.Read(self.ProgramCounter)
@@ -324,7 +327,8 @@ def ReadMachineCode():
 
 CPU = CPU()
 RAM = MemoryObject(MemorySize)
-EmulatorMenu = GUI()
+EmulatorMenu =  EmulatorDashboard.EmulatorDashboard()
+
 
     #0xc8 : {
         #"Func" : CPU.INY,
@@ -372,11 +376,11 @@ CallTable[0xDD] = (CPU.CMPAbsoluteX, 3, 0x83)
 
 CallTable[0xB0] = (CPU.BCS, 2, 0x00)
 
-CallTable[0xA8] = (CPU.TransferRegs["A", "Y"], 1, 0x82)
+CallTable[0xA8] = (CPU.TAY, 1, 0x82)
 
 CallTable[0x9D] = (CPU.STAAbsoluteX, 3, 0x00)
 
-CallTable[0x98] = (CPU.TransferRegs("Y", "A"), 1, 0x82)
+CallTable[0x98] = (CPU.TYA, 1, 0x82)
 
 CallTable[0x60] = (CPU.RTS, 1, 0x00)
 #endregion
@@ -421,9 +425,18 @@ while CPU.Running:
     CallTable[opcode][0]() #I spent like an hour just to learn I need to put parantheses here cause without them it just goes NOP and not NOP()
     #print(CallTable[opcode])
     CPU.IncrementPC(CallTable[opcode][1]-1) #Indexing error .d should've been 1 instead of 2
+    EmulatorMenu.set_pc(CPU.GetPC())
+    EmulatorMenu.set_a(CPU.GetReg("A"))
+    EmulatorMenu.set_x(CPU.GetReg("X"))
+    EmulatorMenu.set_y(CPU.GetReg("Y"))
+    EmulatorMenu.set_sp(CPU.GetReg("S"))
+    EmulatorMenu.set_status(CPU.GetStatusReg())   # N, B, D, C set
+    EmulatorMenu.update()
     cycles += 1
     #print("a")
     #print("stepped")
+
+EmulatorMenu.mainloop()
 
 print(f'X: ' + str(CPU.GetReg("X")))
 print(f'Y: ' + str(CPU.GetReg("Y")))
