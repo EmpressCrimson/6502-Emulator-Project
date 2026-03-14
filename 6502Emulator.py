@@ -35,7 +35,7 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         
         self.Registers = { #all variables
             "A" : 0,
-            "S" : 0,
+            "S" : 0x01FF,
             "X" : 0,
             "Y" : 0,
         }
@@ -65,11 +65,11 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         #print("value:" + Value)
         return Value
     
-    def SetStatusReg(self, flags): #OR
-        self.StatusRegister = self.StatusRegister | (flags+0x20)
+    def setStatusFlag(self, flags): #OR
+        self.StatusRegister = self.StatusRegister | (flags | 0x20)
         
-    def ClearStatusReg(self, flags): #AND
-        self.StatusRegister = self.StatusRegister & (255-flags+0x20)
+    def clearStatusFlag(self, flags): #AND
+        self.StatusRegister = self.StatusRegister & ((~flags) | 0x20)
 
     def CheckStatusReg(self, flags):
         if self.StatusRegister & flags == 0:
@@ -97,9 +97,21 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
     
     def CheckRegZero(self, reg):
         if self.GetReg(reg) == 0:
-            self.SetStatusReg(0x02)
+            self.setStatusFlag(0x02)
         else:
-            self.ClearStatusReg(0x02)
+            self.clearStatusFlag(0x02)
+
+    def CheckRegNegative(self, reg):
+        if self.GetReg(reg) < 0:
+            self.setStatusFlag(0x80)
+        else:
+            self.clearStatusFlag(0x80)
+
+    def transferRegister(self, dest, val):
+        self.Registers[dest] = self.Registers[val]
+        self.CheckRegZero(val)
+        self.CheckRegNegative(val)
+
     #region
 
     def NOP(self):
@@ -108,32 +120,28 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
 
     def BRK(self):
         self.SetRunning(False)
-        self.SetStatusReg(0x10)
+        self.setStatusFlag(0x10)
         #print(self.StatusRegister)
         #print("break")
 
     def INX(self):  
         self.IncDecRegister("X", 0x01)
-        if self.GetReg("X") > -1:
-            self.ClearStatusReg(0x80)
+        self.CheckRegNegative("X")
         self.CheckRegZero("X")
 
     def INY(self):
         self.IncDecRegister("Y", 0x01)
-        if self.GetReg("X") > -1:
-            self.ClearStatusReg(0x80)
+        self.CheckRegNegative("Y")
         self.CheckRegZero("Y")
 
     def DEX(self):
         self.IncDecRegister("X", -0x01)
-        if self.GetReg("X") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("X")
         self.CheckRegZero("X")
 
     def DEY(self):
         self.IncDecRegister("Y", -0x01)
-        if self.GetReg("Y") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("Y")
         self.CheckRegZero("Y")
 
     def LDAImmediate(self):
@@ -141,48 +149,42 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         self.Registers["A"] = RAM.Read(self.ProgramCounter)
         #print(self.Registers["A"])
         self.CheckRegZero("A")
-        if self.GetReg("A") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("A")
     
     def LDAZeroP(self):
         address = RAM.Read(self.ProgramCounter)
         self.Registers["A"] = RAM.Read(address)
         #print(self.Registers["A"])
         self.CheckRegZero("A")
-        if self.GetReg("A") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("A")
 
     def LDXImmediate(self):
         #self.Registers["X"] = self.Step(RAM)
         self.Registers["X"] = RAM.Read(self.ProgramCounter)
         #print(self.Registers["X"])
         self.CheckRegZero("X")
-        if self.GetReg("X") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("X")
     
     def LDXZeroP(self):
         address = RAM.Read(self.ProgramCounter)
         self.Registers["X"] = RAM.Read(address)
         #print(self.Registers["X"])
         self.CheckRegZero("X")
-        if self.GetReg("X") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("X")
 
     def LDYImmediate(self):
         #self.Registers["Y"] = self.Step(RAM)
         self.Registers["Y"] = RAM.Read(self.ProgramCounter)
         #print(self.Registers["Y"])
         self.CheckRegZero("Y")
-        if self.GetReg("Y") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("Y")
     
     def LDYZeroP(self):
         address = RAM.Read(self.ProgramCounter)
         self.Registers["Y"] = RAM.Read(address)
         #print(self.Registers["Y"])
         self.CheckRegZero("Y")
-        if self.GetReg("Y") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("Y")
 
     def BNE(self):
         address = RAM.Read(self.ProgramCounter)
@@ -220,8 +222,7 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         address = address<<8 | RAM.Read(self.ProgramCounter)
         self.Registers["A"] = RAM.Read(address+self.Registers["X"])
         self.CheckRegZero("A")
-        if self.GetReg("A") < 0:
-            self.SetStatusReg(0x80)
+        self.CheckRegNegative("A")
         
     def CMPAbsoluteX(self):
         address = RAM.Read(self.ProgramCounter+1) #cant believe I missed that a high and low byte exists
@@ -230,7 +231,7 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         Compare_Value = RAM.Read((address+self.Registers["X"]) & 0xFFFF) #0xFFFF is for caution I think so I am adding it just in case
         result = (Register_A - Compare_Value) & 0xFF
         flags = 0 #turns out I need to clear my flags first
-        self.ClearStatusReg(0x83)
+        self.clearStatusFlag(0x83)
         if Register_A >= Compare_Value: #turns out this is supposed to compare register A and the compared value not the result itself, smth about carrying over
             flags += 0x01 #FORGOT THE = SIGN AND I WONDER WHY IT DOESNT WORK
 
@@ -240,36 +241,31 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         if result & 0x80: #I am going to check neg values with this from now on hopefully
             flags += 0x80
 
-        self.SetStatusReg(flags)
+        self.setStatusFlag(flags)
         print(self.StatusRegister)
 
     def BCS(self):
-        address = RAM.Read(self.ProgramCounter)
-        if address & 0x80: #check if signed, if so turn negative
-            address -= 0x100
         if self.StatusRegister & 0x01: #Forgot to erase the "not", forgot why it was there but it was needed that I know
-            self.ProgramCounter += (address)
+            offset = RAM.Read(self.ProgramCounter)
+            if offset & 0x80: #check if signed, if so turn negative
+                offset -= 0x100
+            self.ProgramCounter += (offset)
 
     def TAY(self):
-        self.Registers["Y"] = self.Registers["A"]
-        self.CheckRegZero("A")
-        if self.GetReg("A") < 0:
-            self.SetStatusReg(0x80)
+        self.transferRegister("Y", "A")
 
     def TYA(self):
-        self.Registers["A"] = self.Registers["Y"]
-        self.CheckRegZero("Y")
-        if self.GetReg("Y") < 0:
-            self.SetStatusReg(0x80)
+        self.transferRegister("A", "Y")
 
     # def TransferRegs(self, origin, dest):
     #     self.Registers[dest] = self.Registers[origin]
     #     self.CheckRegZero(origin)
     #     if self.GetReg(origin) < 0:
-    #         self.SetStatusReg(0x80)
+    #         self.setStatusFlag(0x80)
 
     def RTS(self):
-        self.ProgramCounter = RAM.Read(self.ProgramCounter)
+        self.ProgramCounter = RAM.Read(self.Registers["S"])
+        self.Registers["S"] += 0x01
 
     #endregion
 
@@ -324,6 +320,14 @@ def ReadMachineCode():
         RAM.Write(0x0200+offset, False, int(byte, 2))
         offset += 0x0001
 
+def UpdateGUI():
+    EmulatorMenu.set_pc(CPU.GetPC())
+    EmulatorMenu.set_a(CPU.GetReg("A"))
+    EmulatorMenu.set_x(CPU.GetReg("X"))
+    EmulatorMenu.set_y(CPU.GetReg("Y"))
+    EmulatorMenu.set_sp(CPU.GetReg("S"))
+    EmulatorMenu.set_status(CPU.GetStatusReg())   # N, B, D, C set
+    EmulatorMenu.update()
 
 CPU = CPU()
 RAM = MemoryObject(MemorySize)
@@ -425,18 +429,11 @@ while CPU.Running:
     CallTable[opcode][0]() #I spent like an hour just to learn I need to put parantheses here cause without them it just goes NOP and not NOP()
     #print(CallTable[opcode])
     CPU.IncrementPC(CallTable[opcode][1]-1) #Indexing error .d should've been 1 instead of 2
-    EmulatorMenu.set_pc(CPU.GetPC())
-    EmulatorMenu.set_a(CPU.GetReg("A"))
-    EmulatorMenu.set_x(CPU.GetReg("X"))
-    EmulatorMenu.set_y(CPU.GetReg("Y"))
-    EmulatorMenu.set_sp(CPU.GetReg("S"))
-    EmulatorMenu.set_status(CPU.GetStatusReg())   # N, B, D, C set
-    EmulatorMenu.update()
+    UpdateGUI()
     cycles += 1
     #print("a")
     #print("stepped")
 
-EmulatorMenu.mainloop()
 
 print(f'X: ' + str(CPU.GetReg("X")))
 print(f'Y: ' + str(CPU.GetReg("Y")))
