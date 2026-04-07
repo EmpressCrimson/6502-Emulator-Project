@@ -1,1 +1,66 @@
-10101001 00001000 10000101 11110000 10101001 01000010 10001101 00000000 00001000 10101001 00010111 10001101 00000001 00001000 10101001 10010011 10001101 00000010 00001000 10101001 00000101 10001101 00000011 00001000 10101001 10001000 10001101 00000100 00001000 10101001 00010010 10001101 00000101 00001000 10101001 01010101 10001101 00000110 00001000 10101001 00101001 10001101 00000111 00001000 10101001 00000000 10000101 11110011 10100110 11110000 11001010 10111101 00000000 00001000 11011101 11111111 00000111 10110000 00001111 10101000 10111101 11111111 00000111 10011101 00000000 00001000 10011000 10011101 11111111 00000111 10101001 00000001 10000101 11110011 11001010 11010000 11100110 10100101 11110011 11010000 11011011 01100000 00000000 00000000 00000000 00000000 00000000 00000000
+; 6502 Bubblesort Implementation
+; Sorts an array of bytes in ascending order
+;
+; Memory Map:
+; $0200-$02FF: Array to be sorted (max 256 bytes)
+; $F0: Array length
+; $F1: Outer loop counter
+; $F3: Swapped flag (0 = no swaps, 1 = swap occurred)
+; X register: Array index (also serves as inner loop counter)
+; Y register: Temporary storage for swap
+
+        .org $0600      ; Program starts at $0600
+
+; Initialize test data
+INIT:   LDA #$08        ; Array length = 8
+        STA $F0
+        
+        ; Store test array at $0200
+        LDA #$42
+        STA $0800
+        LDA #$17
+        STA $0801
+        LDA #$93
+        STA $0802
+        LDA #$05
+        STA $0803
+        LDA #$88
+        STA $0804
+        LDA #$12
+        STA $0805
+        LDA #$55
+        STA $0806
+        LDA #$29
+        STA $0807
+
+; Main Bubblesort routine
+SORT:   
+OUTER:  LDA #$00        ; Reset swapped flag
+        STA $F3
+        
+        LDX $F0         ; Load array length
+        DEX             ; X = length - 1 (last index to check)
+
+INNER:  LDA $0800,X     ; Load array[i]
+        CMP $07FF,X     ; Compare with array[i-1]
+        BCS NOSWAP      ; If array[i-1] <= array[i], no swap needed
+        
+        ; Swap array[i-1] and array[i]
+        TAY             ; Save array[i] in Y
+        LDA $07FF,X     ; Load array[i-1]
+        STA $0800,X     ; Store in array[i]
+        TYA             ; Load Y (original array[i])
+        STA $07FF,X     ; Store in array[i-1]
+        
+        LDA #$01        ; Set swapped flag
+        STA $F3
+
+NOSWAP: DEX             ; Move to previous element
+        BNE INNER       ; Continue if X != 0
+        
+        LDA $F3         ; Check swapped flag
+        BNE OUTER       ; If swaps occurred, do another pass
+        
+DONE:   RTS             ; Return from subroutine
+
+        .end

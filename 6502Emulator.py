@@ -58,6 +58,9 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
     
     def IncrementPC(self, value=0x0001):
         self.ProgramCounter += value
+    
+    def SetPC(self, value):
+        self.ProgramCounter = value
 
     def Step(self, RAMObject): #I forgot why these two exist simultaneously
         Value = hex(RAMObject.Read(self.ProgramCounter))
@@ -151,7 +154,7 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         self.CheckRegZero("A")
         self.CheckRegNegative("A")
     
-    def LDAZeroP(self):
+    def LDAZeroPage(self):
         address = RAM.Read(self.ProgramCounter)
         self.Registers["A"] = RAM.Read(address)
         #print(self.Registers["A"])
@@ -165,7 +168,7 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         self.CheckRegZero("X")
         self.CheckRegNegative("X")
     
-    def LDXZeroP(self):
+    def LDXZeroPage(self):
         address = RAM.Read(self.ProgramCounter)
         self.Registers["X"] = RAM.Read(address)
         #print(self.Registers["X"])
@@ -179,7 +182,7 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         self.CheckRegZero("Y")
         self.CheckRegNegative("Y")
     
-    def LDYZeroP(self):
+    def LDYZeroPage(self):
         address = RAM.Read(self.ProgramCounter)
         self.Registers["Y"] = RAM.Read(address)
         #print(self.Registers["Y"])
@@ -190,7 +193,7 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         address = RAM.Read(self.ProgramCounter)
         if address & 0x80: #check if signed, if so turn negative
             address -= 0x100
-        if not (self.StatusRegister & 0x02):
+        if not (self.StatusRegister & 0x40): #why was this 0x02
             self.ProgramCounter += (address)
         #print("bne")
     
@@ -198,12 +201,12 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         address = RAM.Read(self.ProgramCounter)
         if address & 0x80: #check if signed, if so turn negative
             address -= 0x100
-        if self.StatusRegister & 0x02:
+        if self.StatusRegister & 0x40:
             self.ProgramCounter += (address)
 
-    def STAZeroP(self):
+    def STAZeroPage(self):
         address = RAM.Read(self.ProgramCounter)
-        RAM.Write(address, False, self.Registers["A"]) #fix the zeropage so its actually zeropage
+        RAM.Write(address, False, self.Registers["A"]) #fix the ZeroPageage so its actually ZeroPageage
 
     def STAAbsoluteX(self):
         address = RAM.Read(self.ProgramCounter+1)
@@ -267,6 +270,30 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         self.ProgramCounter = RAM.Read(self.Registers["S"])
         self.Registers["S"] += 0x01
 
+
+    def BPL(self):
+        if self.CheckStatusReg(0x80):
+            offset = RAM.Read(self.ProgramCounter)
+            self.ProgramCounter += offset
+
+    def ASL(self):
+        addressToShift = RAM.Read(self.ProgramCounter) + self.GetReg("X")
+        valueToShift = RAM.Read(addressToShift)
+        shiftedValue = valueToShift << 1
+        RAM.Write(addressToShift, 0, shiftedValue)
+
+        self.setStatusFlag(valueToShift >> 7 << 4) #shift right so only bit 7 is left then pad it until it represents the Carry flag
+        if shiftedValue == 0:
+            self.setStatusFlag(0x40) #set Zero flag
+            self.clearStatusFlag(0x80) #clear Negative flag
+        else:
+            self.setStatusFlag(shiftedValue >> 7 << 4) #Get bit 7 then pad until it is in the position of the Carry flag
+            self.clearStatusFlag(0x40) #clear Zero flag
+    
+    def ORA(self):
+        #add indirect accessing
+
+
     #endregion
 
 
@@ -309,16 +336,38 @@ class MemoryObject(): #Ram class
 #             RAM.Write(MemLocation, False, bytes(address))
 #             MemLocation += 0x0001 #GUESS WHO FORGOT TO STEP THE MEMORY LOCATION AND STARTED CHASING GHOSTS
 
+# def ReadMachineCode():
+#     with open(Path(__file__).parent.resolve().joinpath("code.prg"), "rb") as f:
+#         read_data = f.read()
+#     f.closed
+#     print(read_data)
+#     data = read_data.replace(b'\n',b' ')
+#     offset = 0
+#     for byte in data.split(b'\\x'):
+#         print(byte)
+#         #print(byte)
+#         RAM.Write(0x0200+offset, False, int(byte, 2))
+#         offset += 0x0001
+
 def ReadMachineCode():
-    with open(Path(__file__).parent.resolve().joinpath("binarydata.txt"), "rb") as f:
-        read_data = f.read()
+    
+    with open(Path(__file__).parent.resolve().joinpath("code.prg"), "rb") as f:
+        read_data = str(f.read())
     f.closed
-    data = read_data.replace(b'\r\n',b' ')
+    read_data = read_data.split('\\x')
+    read_data.remove("b'")
+    for i in range(0, len(read_data)):
+        read_data[i] = read_data[i][:2]
+
     offset = 0
-    for byte in data.split(b' '):
-        #print(byte)
-        RAM.Write(0x0200+offset, False, int(byte, 2))
+    startAddress = int(read_data[1] + read_data[0])
+    CPU.SetPC(startAddress)
+    print(startAddress)
+    print(CPU.GetPC())
+    for i in range(2, len(read_data)):
+        RAM.Write(startAddress+offset, False, int(read_data[i], 16))
         offset += 0x0001
+
 
 def UpdateGUI():
     EmulatorMenu.set_pc(CPU.GetPC())
@@ -356,21 +405,21 @@ CallTable[0x88] = (CPU.DEY, 1, 0x82)
 
 CallTable[0xa9] = (CPU.LDAImmediate, 2, 0x82)
 
-CallTable[0xa5] = (CPU.LDAZeroP, 2, 0x82)
+CallTable[0xa5] = (CPU.LDAZeroPage, 2, 0x82)
 
 CallTable[0xa2] = (CPU.LDXImmediate, 2, 0x82)
 
-CallTable[0xa6] = (CPU.LDXZeroP, 2, 0x82)
+CallTable[0xa6] = (CPU.LDXZeroPage, 2, 0x82)
     
 CallTable[0xa0] = (CPU.LDYImmediate, 2, 0x82)
 
-CallTable[0xa4] = (CPU.LDYZeroP, 2, 0x82)
+CallTable[0xa4] = (CPU.LDYZeroPage, 2, 0x82)
 
 CallTable[0xd0] = (CPU.BNE, 2, 0x00)
 
 CallTable[0xf0] = (CPU.BEQ, 2, 0x00)
 
-CallTable[0x85] = (CPU.STAZeroP, 2, 0x00)
+CallTable[0x85] = (CPU.STAZeroPage, 2, 0x00)
 
 CallTable[0x8D] = (CPU.STAAbsolute, 3, 0x00)
 
@@ -387,6 +436,12 @@ CallTable[0x9D] = (CPU.STAAbsoluteX, 3, 0x00)
 CallTable[0x98] = (CPU.TYA, 1, 0x82)
 
 CallTable[0x60] = (CPU.RTS, 1, 0x00)
+
+CallTable[0x10] = (CPU.BPL, 2, 0x00)
+
+CallTable[0x16] = (CPU.ASL, 2, 0xd0)
+
+CallTable[0x01] = (CPU.ORA, 2, 0xC0)
 #endregion
 
 
@@ -398,11 +453,11 @@ CallTable[0x60] = (CPU.RTS, 1, 0x00)
 #     CallTable[0xca] = CPU.DEX
 #     CallTable[0x88] = CPU.DEY
 #     CallTable[0xA9] = CPU.LDAImmediate
-#     CallTable[0xA5] = CPU.LDAZeroP
+#     CallTable[0xA5] = CPU.LDAZeroPage
 #     CallTable[0xA2] = CPU.LDXImmediate
-#     CallTable[0xA6] = CPU.LDXZeroP
+#     CallTable[0xA6] = CPU.LDXZeroPage
 #     CallTable[0xA0] = CPU.LDYImmediate
-#     CallTable[0xA4] = CPU.LDYZeroP
+#     CallTable[0xA4] = CPU.LDYZeroPage
 
 # CallTable.insert(0xea, CPU.NOP)
 #     CallTable.insert(0x00, CPU.BRK)
@@ -441,6 +496,6 @@ print(f'A:' + str(CPU.GetReg("A")))
 print(f'StatusRegister ' + (str(bin(CPU.StatusRegister))))
 
 print("program stopped")
-print(RAM.Hexdump())
+#print(RAM.Hexdump())
 print(cycles)
 print(CPU.GetPC())
