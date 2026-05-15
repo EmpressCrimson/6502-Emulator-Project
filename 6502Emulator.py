@@ -260,6 +260,9 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
     def TYA(self):
         self.transferRegister("A", "Y")
 
+    def TXA(self):
+        self.transferRegister("A", "X")
+
     # def TransferRegs(self, origin, dest):
     #     self.Registers[dest] = self.Registers[origin]
     #     self.CheckRegZero(origin)
@@ -267,8 +270,10 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
     #         self.setStatusFlag(0x80)
 
     def RTS(self):
-        self.ProgramCounter = RAM.Read(self.Registers["S"])
-        self.Registers["S"] += 0x01
+        address = RAM.Read(self.Registers["S"]+1)
+        address = address<<8 | RAM.Read(self.Registers["S"])
+        self.ProgramCounter = address + 1
+        self.Registers["S"] += 0x02
 
 
     def BPL(self):
@@ -287,13 +292,28 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
             self.setStatusFlag(0x40) #set Zero flag
             self.clearStatusFlag(0x80) #clear Negative flag
         else:
-            self.setStatusFlag(shiftedValue >> 7 << 4) #Get bit 7 then pad until it is in the position of the Carry flag
+            self.setStatusFlag(shiftedValue >> 7 << 7) #Get bit 7 then pad until it is in the position of the Negative flag
             self.clearStatusFlag(0x40) #clear Zero flag
     
     def ORA(self):
+        addressOfComparingValue = RAM.Read(self.ProgramCounter) + self.GetReg("X")
+        self.Registers["A"] = self.GetReg("A") | RAM.Read(addressOfComparingValue)
         #add indirect accessing
 
+    def STAIndirectY(self):
+        addressToStoreValue = RAM.Read(self.ProgramCounter) + self.GetReg("Y")
+        RAM.Write(addressToStoreValue, 0, self.GetReg("A"))
 
+    def INCZeroPage(self):
+        adress = RAM.Read(self.ProgramCounter)
+        newValueForAdress = RAM.Read(adress) + 1
+        RAM.Write(adress, 0, newValueForAdress)
+        if newValueForAdress == 0:
+            self.setStatusFlag(0x40) #set Zero flag
+            self.clearStatusFlag(0x80) #clear Negative flag
+        else:
+            self.setStatusFlag(newValueForAdress >> 7 << 4) #Get bit 7 then pad until it is in the position of the Carry flag
+            self.clearStatusFlag(0x40) #clear Zero flag
     #endregion
 
 
@@ -310,16 +330,56 @@ class MemoryObject(): #Ram class
     def Write(self, Address, size, value):
         self.Memory[Address] = value
 
-    def Hexdump(self):
-        numOfLoops = int((MemorySize/16)/2048) + 1 #split the hexdump into 2048 segments due to string limit, setup the rownumber loop accordingly
-        for x in range(0,numOfLoops):
-            message = f"Hexdump ({x+1}): "
-            for rownumber in range(int(MemorySize/16)):
-                message += f"\n {rownumber} | " + (" ".join(str(self.Memory[16*rownumber:(rownumber*16)+16], ).lstrip("bytearray(b'").rstrip("')").split(r'\x')))
-            #message += " ".join(self.Memory[16*rownumber:(rownumber*16)+15])
-        #print(message)
-        return message
-        #return self.Memory.hex()
+    def Load(self, loadAddress, value):
+        self.Memory[loadAddress:] = value
+
+    def FormatToHexDump(self, data):
+        listOfRows = []
+        #print(data.count("\\x"))
+        byteData = data.split("\\x")
+        separator = " "
+        byteData = separator.join(byteData) #I WROTE DATA INSTEAD OF BYTEDATA THE NAME CONVENTION IS BITING ME IN THE ASS
+        byteData = byteData[1:] #remove the whitespace at the beginning
+        print(data.count("00"))
+        for rowCount in range(1, int((MemorySize)/16)+1):
+            rowdata = byteData[(rowCount-1)*16*3:(rowCount*16*3)-1] #YESSSSSSS I FIGURED IT OUT THERE IS ONLY 1 SPACE NOT 2 SO HEX+WHITESPACE IS 3
+            # rowdata = rowdata.split("\\x")
+            # separator = " "
+            # rowdata = separator.join(rowdata)
+            rownumber = (rowCount-1)*16
+            listOfRows.append("0x{address:04x} | {bytes}".format(address = rownumber, bytes = rowdata))
+            #print("0x{address:04x} |{bytes}".format(address = rownumber, bytes = rowdata))
+        return listOfRows
+        #for i in range(0, MemorySize/16):
+            
+
+    def HexDump(self): #Took a bit due to some stupid mistakes and oversights, I thought the data wasn't transfering but turns out I wasn't sending everything
+        #Wasn't sending because I was sending the first 65536 characters BUT \x prefixes were included in that (also a byte is made of 2 hex characters), which
+        #led to the data getting cut in quarter
+        #completeDumpList = []
+        memData = str(self.Memory)[12:] #65536 bytes to go
+        #for i in range(1, int((MemorySize)+1)):
+            #dataToFormat = memData[:MemorySize]
+        dumpList = self.FormatToHexDump(memData)
+        #completeDumpList.extend(dumpList)
+
+        with open("HexDump.txt", "w") as f:
+            for v in dumpList:
+               f.write("\n"+v)
+        f.close()
+
+
+
+    # def Hexdump(self):
+    #     numOfLoops = int((MemorySize/16)/2048) + 1 #split the hexdump into 2048 segments due to string limit, setup the rownumber loop accordingly
+    #     for x in range(0,numOfLoops):
+    #         message = f"Hexdump ({x+1}): "
+    #         for rownumber in range(int(MemorySize/16)):
+    #             message += f"\n {rownumber} | " + (" ".join(str(self.Memory[16*rownumber:(rownumber*16)+16], ).lstrip("bytearray(b'").rstrip("')").split(r'\x')))
+    #         #message += " ".join(self.Memory[16*rownumber:(rownumber*16)+15])
+    #     #print(message)
+    #     return message
+    #     #return self.Memory.hex()
 
 # def ReadMachineCode(): #Please name the binary data file to "binarydata.txt" or it won't work.
 #     with open(Path(__file__).parent.resolve().joinpath("binarydata.txt"), "rb") as f:
@@ -351,22 +411,29 @@ class MemoryObject(): #Ram class
 
 def ReadMachineCode():
     
-    with open(Path(__file__).parent.resolve().joinpath("code.prg"), "rb") as f:
-        read_data = str(f.read())
-    f.closed
-    read_data = read_data.split('\\x')
-    read_data.remove("b'")
-    for i in range(0, len(read_data)):
-        read_data[i] = read_data[i][:2]
+    # with open(Path(__file__).parent.resolve().joinpath("code.prg"), "rb") as f:
+    #     read_data = str(f.read())
+    # f.closed
+    # read_data = read_data.split('\\x')
+    # read_data.remove("b'")
+    # for i in range(0, len(read_data)):
+    #     read_data[i] = read_data[i][:2]
 
-    offset = 0
-    startAddress = int(read_data[1] + read_data[0])
-    CPU.SetPC(startAddress)
-    print(startAddress)
-    print(CPU.GetPC())
-    for i in range(2, len(read_data)):
-        RAM.Write(startAddress+offset, False, int(read_data[i], 16))
-        offset += 0x0001
+    # offset = 0
+    # startAddress = int(read_data[1] + read_data[0])
+    # CPU.SetPC(startAddress)
+    # print(startAddress)
+    # print(CPU.GetPC())
+    # for i in range(2, len(read_data)):
+    #     RAM.Write(startAddress+offset, False, int(read_data[i], 16))
+    #     offset += 0x0001
+    with open("code.prg", "rb") as f:
+    # PRG header: 2-byte little-endian address
+        load_address = int.from_bytes(f.read(2), "little")
+
+    # load the rest directly into RAM at that address
+ 
+        RAM.Load(load_address, f.read())
 
 
 def UpdateGUI():
@@ -442,6 +509,12 @@ CallTable[0x10] = (CPU.BPL, 2, 0x00)
 CallTable[0x16] = (CPU.ASL, 2, 0xd0)
 
 CallTable[0x01] = (CPU.ORA, 2, 0xC0)
+
+CallTable[0x91] = (CPU.STAIndirectY, 2, 0x00)
+
+CallTable[0xE6] = (CPU.INCZeroPage, 2, 0xC0)
+
+CallTable[0x8A] = (CPU.TXA, 1, 0xC0)
 #endregion
 
 
@@ -473,9 +546,9 @@ CallTable[0x01] = (CPU.ORA, 2, 0xC0)
 # RAM.Write(0x0104, False, 0x00)
 
 #InitCallTable()
-ReadMachineCode()
-# print(RAM.Hexdump())
-print(RAM.Hexdump())
+
+#ReadMachineCode()
+print(RAM.HexDump())
 cycles = 0
 
 while CPU.Running:
