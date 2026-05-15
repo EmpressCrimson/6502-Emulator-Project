@@ -331,21 +331,21 @@ class MemoryObject(): #Ram class
         self.Memory[Address] = value
 
     def Load(self, loadAddress, value):
-        self.Memory[loadAddress:] = value
+        self.Memory[loadAddress:len(value)-1] = value #the absence of len(value)-1 makes it so that the rest of the bytearray is set to nil as value doesn't exist after its length
+        print(value)
 
     def FormatToHexDump(self, data):
         listOfRows = []
         #print(data.count("\\x"))
-        byteData = data.split("\\x")
-        separator = " "
-        byteData = separator.join(byteData) #I WROTE DATA INSTEAD OF BYTEDATA THE NAME CONVENTION IS BITING ME IN THE ASS
-        byteData = byteData[1:] #remove the whitespace at the beginning
-        print(data.count("00"))
+        #byteData = data.split("\\x")
+        #separator = " "
+        #byteData = separator.join(byteData) #I WROTE DATA INSTEAD OF BYTEDATA THE NAME CONVENTION IS BITING ME IN THE ASS
+        #byteData = byteData[1:] #remove the whitespace at the beginning
+        #print(data.count("00"))
         for rowCount in range(1, int((MemorySize)/16)+1):
-            rowdata = byteData[(rowCount-1)*16*3:(rowCount*16*3)-1] #YESSSSSSS I FIGURED IT OUT THERE IS ONLY 1 SPACE NOT 2 SO HEX+WHITESPACE IS 3
-            # rowdata = rowdata.split("\\x")
-            # separator = " "
-            # rowdata = separator.join(rowdata)
+            rowdata = data[((rowCount-1)*16):(rowCount*16)]
+            ##rowdata = byteData[(rowCount-1)*16*3:(rowCount*16*3)-1] #YESSSSSSS I FIGURED IT OUT THERE IS ONLY 1 SPACE NOT 2 SO HEX+WHITESPACE IS 3
+            rowdata = " ".join(f"{b:02X}" for b in rowdata)
             rownumber = (rowCount-1)*16
             listOfRows.append("0x{address:04x} | {bytes}".format(address = rownumber, bytes = rowdata))
             #print("0x{address:04x} |{bytes}".format(address = rownumber, bytes = rowdata))
@@ -357,7 +357,8 @@ class MemoryObject(): #Ram class
         #Wasn't sending because I was sending the first 65536 characters BUT \x prefixes were included in that (also a byte is made of 2 hex characters), which
         #led to the data getting cut in quarter
         #completeDumpList = []
-        memData = str(self.Memory)[12:] #65536 bytes to go
+        memData = self.Memory #65536 bytes to go
+        print(len(memData))
         #for i in range(1, int((MemorySize)+1)):
             #dataToFormat = memData[:MemorySize]
         dumpList = self.FormatToHexDump(memData)
@@ -547,7 +548,7 @@ CallTable[0x8A] = (CPU.TXA, 1, 0xC0)
 
 #InitCallTable()
 
-#ReadMachineCode()
+ReadMachineCode()
 print(RAM.HexDump())
 cycles = 0
 
