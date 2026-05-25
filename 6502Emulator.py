@@ -97,7 +97,7 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
         self.CheckRegNegative(register)
 
     def transferRegister(self, dest, val):
-        self.GetReg(dest, self.GetReg(val))
+        self.SetReg(dest, self.GetReg(val))
         self.CheckRegZeroOrNeg(val)
 
     #region opcode Functions
@@ -214,9 +214,9 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
 
     def RTS(self):
         register_S = self.GetReg("S")
-        address = RAM.Read(register_S+1)
-        address = address<<8 | RAM.Read(register_S)
-        self.ProgramCounter = address + 1
+        address = RAM.Read(register_S+2)
+        address = address<<8 | RAM.Read(register_S+1)
+        self.ProgramCounter = address - 1 #while loop already goes one forward
         self.IncDecRegister("S", 0x02)
 
     def BPL(self):
@@ -260,8 +260,11 @@ class CPU(): #Reasoning is that I don't want to use global variables so I am jus
     def JSR(self):
         register_S = self.GetReg("S")
         RAM.Write(register_S, (self.ProgramCounter+2)>>8)
-        RAM.Write(register_S-1, (self.ProgramCounter+2)&0x0F)
+        RAM.Write(register_S-1, (self.ProgramCounter+2)&0x0FF)
         self.IncDecRegister("S", -0x02)
+        address = RAM.Read(self.ProgramCounter+1)
+        address = address<<8 | RAM.Read(self.ProgramCounter)
+        self.SetPC(address)
 
     
     #endregion
@@ -414,7 +417,6 @@ while CPU.Running:
     CPU.IncrementPC(CallTable[opcode][1]-1) #Indexing error .d should've been 1 instead of 2
     UpdateGUI()
     cycles += 1
-    print(opcode)
 
 print(RAM.HexDump())
 
