@@ -2,9 +2,16 @@ from pathlib import Path
 from tkinter import *
 from tkinter import ttk
 import EmulatorDashboard
+import pygame
 
 MemorySize = 65536
 Stacksize = 256
+GRAPHICADRESS = 32000
+
+DISPLAY_X = 100
+DISPLAY_Y = 100
+REFRESHPERCYCLE = 128
+LASTREFRESHEDCYCLE = 0
 
 #It feels nice writing actual code after a long time of just scripting, makes me feel less of a fraud as a "programmer"
 
@@ -277,11 +284,24 @@ class MemoryObject(): #Ram class
         self.Memory.replace(bytes(1), bytes(b"0"))
         self.AdressStart = int(512)
 
+        self.DISPLAY = pygame.display.set_mode(size=(DISPLAY_X, DISPLAY_Y))
+        self.DISPLAY.fill(0)
+        self.pixelArray = pygame.PixelArray(self.DISPLAY)
+
+    def drawPixel(self, pixelNumber, value):
+        column = int(pixelNumber/100)
+        row = pixelNumber - (column*100)
+        self.pixelArray[row, column] = value
+        print("hi")
+
+
     def Read(self, Address):
         return self.Memory[Address]
 
     def Write(self, Address, value):
         self.Memory[Address] = value
+        if (Address >= GRAPHICADRESS):
+            self.drawPixel(Address-GRAPHICADRESS, value)
 
     def Load(self, loadAddress, value):
         self.Memory[loadAddress:len(value)-1] = value #the absence of len(value)-1 makes it so that the rest of the bytearray is set to nil as value doesn't exist after its length
@@ -308,6 +328,7 @@ class MemoryObject(): #Ram class
             for v in dumpList:
                f.write("\n"+v)
         f.close()
+
 
 
 def ReadMachineCode(): #Read PRG File and load to memory
@@ -416,6 +437,10 @@ while CPU.Running:
 
     CPU.IncrementPC(CallTable[opcode][1]-1) #Indexing error .d should've been 1 instead of 2
     UpdateGUI()
+
+    if LASTREFRESHEDCYCLE <= REFRESHPERCYCLE:
+        pygame.display.update()
+
     cycles += 1
 
 print(RAM.HexDump())
