@@ -8,10 +8,8 @@ MemorySize = 65536
 Stacksize = 256
 GRAPHICADRESS = 32000
 
-DISPLAY_X = 100
-DISPLAY_Y = 100
-REFRESHPERCYCLE = 128
-LASTREFRESHEDCYCLE = 0
+DISPLAY_X = 400
+DISPLAY_Y = 400
 
 #It feels nice writing actual code after a long time of just scripting, makes me feel less of a fraud as a "programmer"
 
@@ -286,12 +284,11 @@ class MemoryObject(): #Ram class
 
         self.DISPLAY = pygame.display.set_mode(size=(DISPLAY_X, DISPLAY_Y))
         self.DISPLAY.fill(0)
-        self.pixelArray = pygame.PixelArray(self.DISPLAY)
 
     def drawPixel(self, pixelNumber, value):
         column = int(pixelNumber/100)
         row = pixelNumber - (column*100)
-        self.pixelArray[row, column] = value
+        self.DISPLAY.set_at((column,row), value)
         print("hi")
 
 
@@ -437,9 +434,6 @@ while CPU.Running:
 
     CPU.IncrementPC(CallTable[opcode][1]-1) #Indexing error .d should've been 1 instead of 2
     UpdateGUI()
-
-    if LASTREFRESHEDCYCLE <= REFRESHPERCYCLE:
-        pygame.display.update()
 
     cycles += 1
 
